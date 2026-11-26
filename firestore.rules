@@ -1,0 +1,1102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Global Hardened Primitives
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() &&
+        request.auth.token.email is string &&
+        (
+          request.auth.token.email_verified == true ||
+          request.auth.token.firebase.sign_in_provider == 'password'
+        );
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCompositeId(id) {
+      return id is string && id.size() >= 4 && id.size() <= 258 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidClubSlug(slug) {
+      return slug is string && slug.size() >= 2 && slug.size() <= 64 && slug.matches('^[a-z0-9\\-]+$');
+    }
+
+    function isValidHttpsOrEmpty(url) {
+      return url is string && url.size() <= 512 && (url == '' || url.matches('^https://.*$'));
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrapAdmin() {
+      return isVerifiedUser() && (
+        (request.auth.token.email == 'apexorasolution@gmail.com' &&
+          request.auth.token.email_verified == true) ||
+        request.auth.token.email in [
+          'hodcs@uos.edu.pk',
+          'csheadcr@uos.edu.pk',
+          'csheadgr@uos.edu.pk'
+        ]
+      );
+    }
+
+    function bootstrapAdminTitle() {
+      return request.auth.token.email == 'csheadcr@uos.edu.pk'
+        ? 'Head CR'
+        : (request.auth.token.email == 'csheadgr@uos.edu.pk' ? 'Head GR' : 'HOD');
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() ||
+        (isVerifiedUser() &&
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isModeratorUser() {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/moderators/$(request.auth.uid));
+    }
+
+    function isClubModerator(clubId) {
+      return isModeratorUser() &&
+        clubId in get(/databases/$(database)/documents/moderators/$(request.auth.uid)).data.assignedClubIds;
+    }
+
+    function isClubMember(clubId) {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/clubMemberships/$(clubId + '__' + request.auth.uid));
+    }
+
+    // Hardened bounded array validation (validates EVERY index up to max 10)
+    function isValidClubIdList(listVal) {
+      return listVal is list &&
+        listVal.size() <= 10 &&
+        (listVal.size() <= 0 || isValidClubSlug(listVal[0])) &&
+        (listVal.size() <= 1 || isValidClubSlug(listVal[1])) &&
+        (listVal.size() <= 2 || isValidClubSlug(listVal[2])) &&
+        (listVal.size() <= 3 || isValidClubSlug(listVal[3])) &&
+        (listVal.size() <= 4 || isValidClubSlug(listVal[4])) &&
+        (listVal.size() <= 5 || isValidClubSlug(listVal[5])) &&
+        (listVal.size() <= 6 || isValidClubSlug(listVal[6])) &&
+        (listVal.size() <= 7 || isValidClubSlug(listVal[7])) &&
+        (listVal.size() <= 8 || isValidClubSlug(listVal[8])) &&
+        (listVal.size() <= 9 || isValidClubSlug(listVal[9]));
+    }
+
+    function isValidUidList(listVal) {
+      return listVal is list &&
+        listVal.size() <= 10 &&
+        (listVal.size() <= 0 || isValidId(listVal[0])) &&
+        (listVal.size() <= 1 || isValidId(listVal[1])) &&
+        (listVal.size() <= 2 || isValidId(listVal[2])) &&
+        (listVal.size() <= 3 || isValidId(listVal[3])) &&
+        (listVal.size() <= 4 || isValidId(listVal[4])) &&
+        (listVal.size() <= 5 || isValidId(listVal[5])) &&
+        (listVal.size() <= 6 || isValidId(listVal[6])) &&
+        (listVal.size() <= 7 || isValidId(listVal[7])) &&
+        (listVal.size() <= 8 || isValidId(listVal[8])) &&
+        (listVal.size() <= 9 || isValidId(listVal[9]));
+    }
+
+    function isValidClubCategory(cat) {
+      return cat in [
+        'AI & Data',
+        'Systems & Cloud',
+        'Cybersecurity',
+        'Software & Web',
+        'Competitive Programming',
+        'Robotics & IoT',
+        'Research & Open Source'
+      ];
+    }
+
+    // =========================================================================
+    // Module 1 Entity Validation Blueprints (Preserved & Hardened)
+    // =========================================================================
+
+    function isValidUserPrivateAccount(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'email', 'studentId', 'role', 'adminTitle', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'studentId', 'role', 'adminTitle', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid == userId && isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.studentId is string && data.studentId.size() <= 32 && data.studentId.matches('^[a-zA-Z0-9\\-]*$') &&
+        data.role in ['student', 'moderator', 'admin'] &&
+        data.adminTitle in ['none', 'Head CR', 'Head GR', 'HOD'] &&
+        ((data.role == 'admin' && data.adminTitle in ['Head CR', 'Head GR', 'HOD']) ||
+          (data.role != 'admin' && data.adminTitle == 'none')) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMemberProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'photoURL', 'department', 'role', 'adminTitle',
+          'semester', 'track', 'bio', 'assignedClubIds', 'onboardingCompleted',
+          'isDirectoryVisible', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'displayName', 'photoURL', 'department', 'role', 'adminTitle',
+          'semester', 'track', 'bio', 'assignedClubIds', 'onboardingCompleted',
+          'isDirectoryVisible', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid == userId && isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 80 &&
+        isValidHttpsOrEmpty(data.photoURL) &&
+        data.department == 'CS' &&
+        data.role in ['student', 'moderator', 'admin'] &&
+        data.adminTitle in ['none', 'Head CR', 'Head GR', 'HOD'] &&
+        ((data.role == 'admin' && data.adminTitle in ['Head CR', 'Head GR', 'HOD']) ||
+          (data.role != 'admin' && data.adminTitle == 'none')) &&
+        data.semester in [
+          'Semester 1', 'Semester 2', 'Semester 3', 'Semester 4',
+          'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8', 'Faculty'
+        ] &&
+        data.track in [
+          'General CS', 'Systems & Architecture', 'AI & Machine Learning',
+          'Cybersecurity', 'Software Engineering', 'Data Science', 'Department Faculty'
+        ] &&
+        data.bio is string && data.bio.size() <= 280 &&
+        isValidClubIdList(data.assignedClubIds) &&
+        (data.role == 'moderator' || data.assignedClubIds.size() == 0) &&
+        data.onboardingCompleted is bool &&
+        data.isDirectoryVisible is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data, userId) {
+      return data.keys().hasAll(['uid', 'adminTitle', 'grantedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'adminTitle', 'grantedBy', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid == userId && isValidId(data.uid) &&
+        data.adminTitle in ['Head CR', 'Head GR', 'HOD'] &&
+        data.grantedBy is string && isValidId(data.grantedBy) && data.grantedBy == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidModeratorRecord(data, userId) {
+      return data.keys().hasAll(['uid', 'assignedClubIds', 'grantedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'assignedClubIds', 'grantedBy', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid == userId && isValidId(data.uid) &&
+        isValidClubIdList(data.assignedClubIds) &&
+        data.grantedBy is string && isValidId(data.grantedBy) && data.grantedBy == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Modules 2–8 Entity Validation Blueprints
+    // =========================================================================
+
+    function isValidClub(data, clubId) {
+      return data.keys().hasAll([
+          'clubId', 'name', 'description', 'category', 'logoUrl', 'department',
+          'status', 'memberCount', 'moderatorIds', 'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'clubId', 'name', 'description', 'category', 'logoUrl', 'department',
+          'status', 'memberCount', 'moderatorIds', 'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidClubSlug(data.clubId) && data.clubId == clubId &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+        data.description is string && data.description.size() >= 10 && data.description.size() <= 800 &&
+        isValidClubCategory(data.category) &&
+        isValidHttpsOrEmpty(data.logoUrl) &&
+        data.department == 'CS' &&
+        data.status in ['active', 'archived'] &&
+        data.memberCount is int && data.memberCount >= 0 &&
+        isValidUidList(data.moderatorIds) &&
+        isValidId(data.createdBy) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidClubMembership(data, membershipId) {
+      return data.keys().hasAll([
+          'membershipId', 'clubId', 'clubName', 'userId', 'memberName', 'department', 'joinedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'membershipId', 'clubId', 'clubName', 'userId', 'memberName', 'department', 'joinedAt'
+        ]) &&
+        isValidCompositeId(data.membershipId) &&
+        data.membershipId == membershipId &&
+        isValidClubSlug(data.clubId) &&
+        data.clubName is string && data.clubName.size() >= 2 && data.clubName.size() <= 80 &&
+        isValidId(data.userId) &&
+        data.membershipId == data.clubId + '__' + data.userId &&
+        data.memberName is string && data.memberName.size() >= 2 && data.memberName.size() <= 80 &&
+        data.department == 'CS' &&
+        data.joinedAt is timestamp;
+    }
+
+    function isValidClubRequest(data, requestId) {
+      return data.keys().hasAll([
+          'requestId', 'name', 'proposedSlug', 'category', 'description', 'justification',
+          'logoUrl', 'department', 'requestedBy', 'requesterName', 'status',
+          'reviewNote', 'reviewedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'requestId', 'name', 'proposedSlug', 'category', 'description', 'justification',
+          'logoUrl', 'department', 'requestedBy', 'requesterName', 'status',
+          'reviewNote', 'reviewedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.requestId) && data.requestId == requestId &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+        isValidClubSlug(data.proposedSlug) &&
+        isValidClubCategory(data.category) &&
+        data.description is string && data.description.size() >= 10 && data.description.size() <= 800 &&
+        data.justification is string && data.justification.size() >= 10 && data.justification.size() <= 500 &&
+        isValidHttpsOrEmpty(data.logoUrl) &&
+        data.department == 'CS' &&
+        isValidId(data.requestedBy) &&
+        data.requesterName is string && data.requesterName.size() >= 2 && data.requesterName.size() <= 80 &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        data.reviewNote is string && data.reviewNote.size() <= 400 &&
+        data.reviewedBy is string && data.reviewedBy.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPost(data, postId) {
+      return data.keys().hasAll([
+          'postId', 'clubId', 'clubName', 'department', 'authorId', 'authorName', 'authorRole',
+          'title', 'body', 'externalUrl', 'attachmentUrl', 'attachmentName', 'attachmentType',
+          'isPinned', 'status', 'removedReason', 'moderatedBy',
+          'upvoteCount', 'downvoteCount', 'voteScore', 'commentCount', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'postId', 'clubId', 'clubName', 'department', 'authorId', 'authorName', 'authorRole',
+          'title', 'body', 'externalUrl', 'attachmentUrl', 'attachmentName', 'attachmentType',
+          'isPinned', 'status', 'removedReason', 'moderatedBy',
+          'upvoteCount', 'downvoteCount', 'voteScore', 'commentCount', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.postId) && data.postId == postId &&
+        isValidClubSlug(data.clubId) &&
+        data.clubName is string && data.clubName.size() >= 2 && data.clubName.size() <= 80 &&
+        data.department == 'CS' &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 80 &&
+        data.authorRole in ['student', 'moderator', 'admin'] &&
+        data.title is string && data.title.size() >= 4 && data.title.size() <= 180 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 8000 &&
+        isValidHttpsOrEmpty(data.externalUrl) &&
+        isValidHttpsOrEmpty(data.attachmentUrl) &&
+        data.attachmentName is string && data.attachmentName.size() <= 120 &&
+        data.attachmentType in ['none', 'image', 'document'] &&
+        data.isPinned is bool &&
+        data.status in ['active', 'removed', 'deleted'] &&
+        data.removedReason is string && data.removedReason.size() <= 300 &&
+        data.moderatedBy is string && data.moderatedBy.size() <= 128 &&
+        data.upvoteCount is int && data.upvoteCount >= 0 &&
+        data.downvoteCount is int && data.downvoteCount >= 0 &&
+        data.voteScore is int && data.voteScore == data.upvoteCount - data.downvoteCount &&
+        data.commentCount is int && data.commentCount >= 0 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidComment(data, commentId) {
+      return data.keys().hasAll([
+          'commentId', 'postId', 'clubId', 'parentCommentId', 'department',
+          'authorId', 'authorName', 'authorRole', 'body', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'commentId', 'postId', 'clubId', 'parentCommentId', 'department',
+          'authorId', 'authorName', 'authorRole', 'body', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.commentId) && data.commentId == commentId &&
+        isValidId(data.postId) &&
+        isValidClubSlug(data.clubId) &&
+        data.parentCommentId is string && data.parentCommentId.size() <= 128 &&
+        (data.parentCommentId == '' || isValidId(data.parentCommentId)) &&
+        data.department == 'CS' &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 80 &&
+        data.authorRole in ['student', 'moderator', 'admin'] &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 3000 &&
+        data.status in ['active', 'removed', 'deleted'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPostVote(data, voteId) {
+      return data.keys().hasAll(['voteId', 'postId', 'clubId', 'userId', 'value', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['voteId', 'postId', 'clubId', 'userId', 'value', 'createdAt', 'updatedAt']) &&
+        isValidCompositeId(data.voteId) && data.voteId == voteId &&
+        isValidId(data.postId) &&
+        isValidClubSlug(data.clubId) &&
+        isValidId(data.userId) &&
+        data.voteId == data.postId + '__' + data.userId &&
+        data.value in [1, -1] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPostBookmark(data, bookmarkId) {
+      return data.keys().hasAll(['bookmarkId', 'postId', 'clubId', 'postTitle', 'userId', 'createdAt']) &&
+        data.keys().hasOnly(['bookmarkId', 'postId', 'clubId', 'postTitle', 'userId', 'createdAt']) &&
+        isValidCompositeId(data.bookmarkId) && data.bookmarkId == bookmarkId &&
+        isValidId(data.postId) &&
+        isValidClubSlug(data.clubId) &&
+        data.postTitle is string && data.postTitle.size() >= 1 && data.postTitle.size() <= 180 &&
+        isValidId(data.userId) &&
+        data.bookmarkId == data.postId + '__' + data.userId &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAnnouncement(data, announcementId) {
+      return data.keys().hasAll([
+          'announcementId', 'title', 'body', 'category', 'externalUrl',
+          'attachmentUrl', 'attachmentName', 'isPinned', 'status', 'department',
+          'authorId', 'authorName', 'authorTitle', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'announcementId', 'title', 'body', 'category', 'externalUrl',
+          'attachmentUrl', 'attachmentName', 'isPinned', 'status', 'department',
+          'authorId', 'authorName', 'authorTitle', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.announcementId) && data.announcementId == announcementId &&
+        data.title is string && data.title.size() >= 4 && data.title.size() <= 180 &&
+        data.body is string && data.body.size() >= 10 && data.body.size() <= 8000 &&
+        data.category in ['Academic', 'Examination', 'Club Notice', 'Placement & Career', 'General'] &&
+        isValidHttpsOrEmpty(data.externalUrl) &&
+        isValidHttpsOrEmpty(data.attachmentUrl) &&
+        data.attachmentName is string && data.attachmentName.size() <= 120 &&
+        data.isPinned is bool &&
+        data.status in ['published', 'archived'] &&
+        data.department == 'CS' &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 80 &&
+        data.authorTitle in ['Head CR', 'Head GR', 'HOD'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDepartmentEvent(data, eventId) {
+      return data.keys().hasAll([
+          'eventId', 'title', 'description', 'category', 'eventDate', 'startTime', 'endTime',
+          'venue', 'registrationUrl', 'clubId', 'status', 'department',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'eventId', 'title', 'description', 'category', 'eventDate', 'startTime', 'endTime',
+          'venue', 'registrationUrl', 'clubId', 'status', 'department',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.eventId) && data.eventId == eventId &&
+        data.title is string && data.title.size() >= 4 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 10 && data.description.size() <= 3000 &&
+        data.category in ['Seminar', 'Workshop', 'Hackathon', 'Club Meetup', 'Academic Deadline', 'Department Townhall'] &&
+        data.eventDate is string && data.eventDate.size() == 10 && data.eventDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.startTime is string && data.startTime.size() == 5 && data.startTime.matches('^[0-9]{2}:[0-9]{2}$') &&
+        data.endTime is string && data.endTime.size() == 5 && data.endTime.matches('^[0-9]{2}:[0-9]{2}$') &&
+        data.venue is string && data.venue.size() >= 2 && data.venue.size() <= 160 &&
+        isValidHttpsOrEmpty(data.registrationUrl) &&
+        data.clubId is string && data.clubId.size() <= 64 && (data.clubId == '' || isValidClubSlug(data.clubId)) &&
+        data.status in ['scheduled', 'cancelled', 'archived'] &&
+        data.department == 'CS' &&
+        isValidId(data.createdBy) &&
+        data.createdByName is string && data.createdByName.size() >= 2 && data.createdByName.size() <= 80 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data, notificationId) {
+      return data.keys().hasAll([
+          'notificationId', 'recipientId', 'actorId', 'actorName', 'type',
+          'title', 'message', 'targetSection', 'targetId', 'isRead', 'createdAt', 'readAt'
+        ]) &&
+        data.keys().hasOnly([
+          'notificationId', 'recipientId', 'actorId', 'actorName', 'type',
+          'title', 'message', 'targetSection', 'targetId', 'isRead', 'createdAt', 'readAt'
+        ]) &&
+        isValidId(data.notificationId) && data.notificationId == notificationId &&
+        isValidId(data.recipientId) &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 80 &&
+        data.type in ['club_request', 'announcement', 'event', 'club_activity', 'moderation', 'post_comment', 'comment_reply'] &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 140 &&
+        data.message is string && data.message.size() >= 2 && data.message.size() <= 400 &&
+        data.targetSection in ['clubs', 'discussions', 'announcements', 'calendar', 'moderator', 'admin', 'overview'] &&
+        data.targetId is string && data.targetId.size() <= 128 &&
+        data.isRead is bool &&
+        data.createdAt is timestamp &&
+        (data.readAt == null || data.readAt is timestamp);
+    }
+
+    function isValidReport(data, reportId) {
+      return data.keys().hasAll([
+          'reportId', 'targetType', 'targetId', 'postId', 'clubId', 'department',
+          'targetExcerpt', 'reason', 'details', 'reportedBy', 'reporterName',
+          'status', 'resolutionNote', 'resolvedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'reportId', 'targetType', 'targetId', 'postId', 'clubId', 'department',
+          'targetExcerpt', 'reason', 'details', 'reportedBy', 'reporterName',
+          'status', 'resolutionNote', 'resolvedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.reportId) && data.reportId == reportId &&
+        data.targetType in ['post', 'comment'] &&
+        isValidId(data.targetId) &&
+        isValidId(data.postId) &&
+        isValidClubSlug(data.clubId) &&
+        data.department == 'CS' &&
+        data.targetExcerpt is string && data.targetExcerpt.size() <= 240 &&
+        data.reason in [
+          'Spam or Self-Promotion',
+          'Harassment or Disrespect',
+          'Off-Topic for Club',
+          'Academic Integrity Violation',
+          'Misinformation or Unsafe Link'
+        ] &&
+        data.details is string && data.details.size() <= 500 &&
+        isValidId(data.reportedBy) &&
+        data.reporterName is string && data.reporterName.size() >= 2 && data.reporterName.size() <= 80 &&
+        data.status in ['open', 'resolved', 'dismissed'] &&
+        data.resolutionNote is string && data.resolutionNote.size() <= 400 &&
+        data.resolvedBy is string && data.resolvedBy.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data, logId) {
+      return data.keys().hasAll([
+          'logId', 'actorId', 'actorName', 'actorRole', 'action',
+          'entityType', 'entityId', 'summary', 'department', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'logId', 'actorId', 'actorName', 'actorRole', 'action',
+          'entityType', 'entityId', 'summary', 'department', 'createdAt'
+        ]) &&
+        isValidId(data.logId) && data.logId == logId &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 80 &&
+        data.actorRole in ['student', 'moderator', 'admin'] &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 80 &&
+        data.entityType in ['club', 'clubRequest', 'post', 'comment', 'announcement', 'event', 'report', 'role'] &&
+        data.entityId is string && data.entityId.size() >= 1 && data.entityId.size() <= 128 &&
+        data.summary is string && data.summary.size() >= 2 && data.summary.size() <= 300 &&
+        data.department == 'CS' &&
+        data.createdAt is timestamp;
+    }
+
+    // =========================================================================
+    // Module 1 Collections (Preserved & Hardened)
+    // =========================================================================
+
+    match /users/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserPrivateAccount(incoming(), userId) &&
+        isOwner(userId) &&
+        incoming().email == request.auth.token.email &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/profiles/$(userId)) &&
+        (
+          (incoming().role == 'student' && incoming().adminTitle == 'none') ||
+          (isBootstrapAdmin() &&
+            incoming().role == 'admin' &&
+            incoming().adminTitle == bootstrapAdminTitle() &&
+            existsAfter(/databases/$(database)/documents/admins/$(userId)))
+        );
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserPrivateAccount(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isOwner(userId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['studentId', 'updatedAt'])) ||
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['role', 'adminTitle', 'updatedAt']) &&
+            (
+              (incoming().role == 'admin' && existsAfter(/databases/$(database)/documents/admins/$(userId))) ||
+              (incoming().role == 'moderator' && existsAfter(/databases/$(database)/documents/moderators/$(userId))) ||
+              (incoming().role == 'student' &&
+                !existsAfter(/databases/$(database)/documents/admins/$(userId)) &&
+                !existsAfter(/databases/$(database)/documents/moderators/$(userId)))
+            ))
+        );
+
+      allow delete: if false;
+    }
+
+    match /profiles/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId);
+      allow list: if isVerifiedUser() &&
+        resource.data.department == 'CS' &&
+        resource.data.isDirectoryVisible == true;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidMemberProfile(incoming(), userId) &&
+        isOwner(userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/users/$(userId)) &&
+        (
+          (incoming().role == 'student' && incoming().adminTitle == 'none' && incoming().assignedClubIds.size() == 0) ||
+          (isBootstrapAdmin() &&
+            incoming().role == 'admin' &&
+            incoming().adminTitle == bootstrapAdminTitle() &&
+            incoming().assignedClubIds.size() == 0 &&
+            existsAfter(/databases/$(database)/documents/admins/$(userId)))
+        );
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidMemberProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().department == existing().department &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isOwner(userId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'photoURL', 'semester', 'track', 'bio',
+              'onboardingCompleted', 'isDirectoryVisible', 'updatedAt'
+            ])) ||
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'role', 'adminTitle', 'assignedClubIds', 'updatedAt'
+            ]) &&
+            (
+              (incoming().role == 'admin' &&
+                incoming().adminTitle in ['Head CR', 'Head GR', 'HOD'] &&
+                incoming().assignedClubIds.size() == 0 &&
+                existsAfter(/databases/$(database)/documents/admins/$(userId)) &&
+                !existsAfter(/databases/$(database)/documents/moderators/$(userId))) ||
+              (incoming().role == 'moderator' &&
+                incoming().adminTitle == 'none' &&
+                existsAfter(/databases/$(database)/documents/moderators/$(userId)) &&
+                !existsAfter(/databases/$(database)/documents/admins/$(userId))) ||
+              (incoming().role == 'student' &&
+                incoming().adminTitle == 'none' &&
+                incoming().assignedClubIds.size() == 0 &&
+                !existsAfter(/databases/$(database)/documents/admins/$(userId)) &&
+                !existsAfter(/databases/$(database)/documents/moderators/$(userId)))
+            )) ||
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'semester', 'track', 'bio', 'isDirectoryVisible', 'updatedAt'
+            ]))
+        );
+
+      allow delete: if false;
+    }
+
+    match /admins/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidAdminRecord(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        existsAfter(/databases/$(database)/documents/profiles/$(userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidAdminRecord(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['adminTitle', 'grantedBy', 'updatedAt']);
+
+      allow delete: if isVerifiedUser() && isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    match /moderators/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidModeratorRecord(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        existsAfter(/databases/$(database)/documents/profiles/$(userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidModeratorRecord(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['assignedClubIds', 'grantedBy', 'updatedAt']);
+
+      allow delete: if isVerifiedUser() && isValidId(userId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Module 2 Collections: Clubs, Memberships, Requests
+    // =========================================================================
+
+    match /clubs/{clubId} {
+      allow get: if isVerifiedUser() && isValidClubSlug(clubId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidClubSlug(clubId) &&
+        isValidClub(incoming(), clubId) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().memberCount == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerifiedUser() &&
+        isValidClubSlug(clubId) &&
+        isValidClub(incoming(), clubId) &&
+        incoming().clubId == existing().clubId &&
+        incoming().department == existing().department &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'description', 'category', 'logoUrl', 'status', 'moderatorIds', 'updatedAt'
+            ])) ||
+          (existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt']) &&
+            incoming().memberCount == existing().memberCount + 1 &&
+            !exists(/databases/$(database)/documents/clubMemberships/$(clubId + '__' + request.auth.uid)) &&
+            existsAfter(/databases/$(database)/documents/clubMemberships/$(clubId + '__' + request.auth.uid))) ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt']) &&
+            incoming().memberCount == existing().memberCount - 1 &&
+            exists(/databases/$(database)/documents/clubMemberships/$(clubId + '__' + request.auth.uid)) &&
+            !existsAfter(/databases/$(database)/documents/clubMemberships/$(clubId + '__' + request.auth.uid)))
+        );
+
+      allow delete: if isVerifiedUser() && isValidClubSlug(clubId) && isAdmin();
+    }
+
+    match /clubMemberships/{membershipId} {
+      allow get: if isVerifiedUser() && isValidCompositeId(membershipId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidCompositeId(membershipId) &&
+        isValidClubMembership(incoming(), membershipId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().joinedAt == request.time &&
+        exists(/databases/$(database)/documents/clubs/$(incoming().clubId)) &&
+        get(/databases/$(database)/documents/clubs/$(incoming().clubId)).data.status == 'active';
+
+      allow update: if false;
+
+      allow delete: if isVerifiedUser() &&
+        isValidCompositeId(membershipId) &&
+        (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /clubRequests/{requestId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        (existing().requestedBy == request.auth.uid || isAdmin());
+
+      allow list: if isVerifiedUser() &&
+        resource.data.department == 'CS' &&
+        (resource.data.requestedBy == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        isValidClubRequest(incoming(), requestId) &&
+        incoming().requestedBy == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().reviewNote == '' &&
+        incoming().reviewedBy == '' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        isValidClubRequest(incoming(), requestId) &&
+        incoming().requestId == existing().requestId &&
+        incoming().requestedBy == existing().requestedBy &&
+        incoming().requesterName == existing().requesterName &&
+        incoming().department == existing().department &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        existing().status == 'pending' &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewNote', 'reviewedBy', 'updatedAt']) &&
+        incoming().status in ['approved', 'rejected'] &&
+        incoming().reviewedBy == request.auth.uid;
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        (isAdmin() || (existing().requestedBy == request.auth.uid && existing().status == 'pending'));
+    }
+
+    // =========================================================================
+    // Modules 3 & 4 Collections: Posts, Comments, Votes, Bookmarks
+    // =========================================================================
+
+    match /posts/{postId} {
+      allow get: if isVerifiedUser() && isValidId(postId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidId(postId) &&
+        isValidPost(incoming(), postId) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().removedReason == '' &&
+        incoming().moderatedBy == '' &&
+        incoming().upvoteCount == 0 &&
+        incoming().downvoteCount == 0 &&
+        incoming().voteScore == 0 &&
+        incoming().commentCount == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/clubs/$(incoming().clubId)) &&
+        get(/databases/$(database)/documents/clubs/$(incoming().clubId)).data.status == 'active' &&
+        (isClubMember(incoming().clubId) || isAdmin() || isClubModerator(incoming().clubId)) &&
+        (!incoming().isPinned || isAdmin() || isClubModerator(incoming().clubId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(postId) &&
+        isValidPost(incoming(), postId) &&
+        incoming().postId == existing().postId &&
+        incoming().clubId == existing().clubId &&
+        incoming().clubName == existing().clubName &&
+        incoming().department == existing().department &&
+        incoming().authorId == existing().authorId &&
+        incoming().authorName == existing().authorName &&
+        incoming().authorRole == existing().authorRole &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (existing().authorId == request.auth.uid &&
+            existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'body', 'externalUrl', 'attachmentUrl', 'attachmentName', 'attachmentType', 'updatedAt'
+            ])) ||
+          (existing().authorId == request.auth.uid &&
+            existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+            incoming().status == 'deleted') ||
+          ((isAdmin() || isClubModerator(existing().clubId)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'isPinned', 'status', 'removedReason', 'moderatedBy', 'updatedAt'
+            ]) &&
+            incoming().moderatedBy == request.auth.uid) ||
+          (existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'upvoteCount', 'downvoteCount', 'voteScore', 'updatedAt'
+            ]) &&
+            (incoming().upvoteCount - existing().upvoteCount) >= -1 &&
+            (incoming().upvoteCount - existing().upvoteCount) <= 1 &&
+            (incoming().downvoteCount - existing().downvoteCount) >= -1 &&
+            (incoming().downvoteCount - existing().downvoteCount) <= 1 &&
+            (
+              (!existsAfter(/databases/$(database)/documents/votes/$(postId + '__' + request.auth.uid)) &&
+                exists(/databases/$(database)/documents/votes/$(postId + '__' + request.auth.uid))) ||
+              (existsAfter(/databases/$(database)/documents/votes/$(postId + '__' + request.auth.uid)) &&
+                getAfter(/databases/$(database)/documents/votes/$(postId + '__' + request.auth.uid)).data.updatedAt == request.time)
+            )) ||
+          (existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['commentCount', 'updatedAt']) &&
+            (incoming().commentCount == existing().commentCount + 1 ||
+              incoming().commentCount == existing().commentCount - 1) &&
+            (isClubMember(existing().clubId) || isAdmin() || isClubModerator(existing().clubId)))
+        );
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(postId) &&
+        (existing().authorId == request.auth.uid || isAdmin() || isClubModerator(existing().clubId));
+    }
+
+    match /comments/{commentId} {
+      allow get: if isVerifiedUser() && isValidId(commentId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidId(commentId) &&
+        isValidComment(incoming(), commentId) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/posts/$(incoming().postId)) &&
+        get(/databases/$(database)/documents/posts/$(incoming().postId)).data.status == 'active' &&
+        get(/databases/$(database)/documents/posts/$(incoming().postId)).data.clubId == incoming().clubId &&
+        (incoming().parentCommentId == '' || exists(/databases/$(database)/documents/comments/$(incoming().parentCommentId))) &&
+        (isClubMember(incoming().clubId) || isAdmin() || isClubModerator(incoming().clubId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(commentId) &&
+        isValidComment(incoming(), commentId) &&
+        incoming().commentId == existing().commentId &&
+        incoming().postId == existing().postId &&
+        incoming().clubId == existing().clubId &&
+        incoming().parentCommentId == existing().parentCommentId &&
+        incoming().department == existing().department &&
+        incoming().authorId == existing().authorId &&
+        incoming().authorName == existing().authorName &&
+        incoming().authorRole == existing().authorRole &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (existing().authorId == request.auth.uid &&
+            existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['body', 'updatedAt'])) ||
+          (existing().authorId == request.auth.uid &&
+            existing().status == 'active' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'body', 'updatedAt']) &&
+            incoming().status == 'deleted') ||
+          ((isAdmin() || isClubModerator(existing().clubId)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'body', 'updatedAt']) &&
+            incoming().status == 'removed')
+        );
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(commentId) &&
+        (existing().authorId == request.auth.uid || isAdmin() || isClubModerator(existing().clubId));
+    }
+
+    match /votes/{voteId} {
+      allow get: if isVerifiedUser() && isValidCompositeId(voteId) && existing().userId == request.auth.uid;
+      allow list: if isVerifiedUser() && resource.data.userId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidCompositeId(voteId) &&
+        isValidPostVote(incoming(), voteId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/posts/$(incoming().postId)) &&
+        get(/databases/$(database)/documents/posts/$(incoming().postId)).data.status == 'active';
+
+      allow update: if isVerifiedUser() &&
+        isValidCompositeId(voteId) &&
+        isValidPostVote(incoming(), voteId) &&
+        existing().userId == request.auth.uid &&
+        incoming().voteId == existing().voteId &&
+        incoming().postId == existing().postId &&
+        incoming().clubId == existing().clubId &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['value', 'updatedAt']);
+
+      allow delete: if isVerifiedUser() && isValidCompositeId(voteId) && existing().userId == request.auth.uid;
+    }
+
+    match /bookmarks/{bookmarkId} {
+      allow get: if isVerifiedUser() && isValidCompositeId(bookmarkId) && existing().userId == request.auth.uid;
+      allow list: if isVerifiedUser() && resource.data.userId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidCompositeId(bookmarkId) &&
+        isValidPostBookmark(incoming(), bookmarkId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/posts/$(incoming().postId));
+
+      allow update: if false;
+
+      allow delete: if isVerifiedUser() && isValidCompositeId(bookmarkId) && existing().userId == request.auth.uid;
+    }
+
+    // =========================================================================
+    // Modules 5 & 6 Collections: Official Announcements & Department Events
+    // =========================================================================
+
+    match /announcements/{announcementId} {
+      allow get: if isVerifiedUser() && isValidId(announcementId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming(), announcementId) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerifiedUser() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming(), announcementId) &&
+        incoming().announcementId == existing().announcementId &&
+        incoming().department == existing().department &&
+        incoming().authorId == existing().authorId &&
+        incoming().authorName == existing().authorName &&
+        incoming().authorTitle == existing().authorTitle &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'body', 'category', 'externalUrl', 'attachmentUrl', 'attachmentName',
+          'isPinned', 'status', 'updatedAt'
+        ]);
+
+      allow delete: if isVerifiedUser() && isValidId(announcementId) && isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow get: if isVerifiedUser() && isValidId(eventId);
+      allow list: if isVerifiedUser() && resource.data.department == 'CS';
+
+      allow create: if isVerifiedUser() &&
+        isValidId(eventId) &&
+        isValidDepartmentEvent(incoming(), eventId) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerifiedUser() &&
+        isValidId(eventId) &&
+        isValidDepartmentEvent(incoming(), eventId) &&
+        incoming().eventId == existing().eventId &&
+        incoming().department == existing().department &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdByName == existing().createdByName &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'description', 'category', 'eventDate', 'startTime', 'endTime',
+          'venue', 'registrationUrl', 'clubId', 'status', 'updatedAt'
+        ]);
+
+      allow delete: if isVerifiedUser() && isValidId(eventId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Modules 7 & 8 Collections: Notifications, Reports, Activity Logs
+    // =========================================================================
+
+    match /notifications/{notificationId} {
+      allow get: if isVerifiedUser() && isValidId(notificationId) && existing().recipientId == request.auth.uid;
+      allow list: if isVerifiedUser() && resource.data.recipientId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming(), notificationId) &&
+        incoming().actorId == request.auth.uid &&
+        incoming().isRead == false &&
+        incoming().readAt == null &&
+        incoming().createdAt == request.time &&
+        (isAdmin() || isModeratorUser() || incoming().type in ['club_activity', 'post_comment', 'comment_reply']);
+
+      allow update: if isVerifiedUser() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming(), notificationId) &&
+        existing().recipientId == request.auth.uid &&
+        incoming().notificationId == existing().notificationId &&
+        incoming().recipientId == existing().recipientId &&
+        incoming().actorId == existing().actorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'readAt']) &&
+        incoming().isRead == true &&
+        incoming().readAt == request.time;
+
+      allow delete: if isVerifiedUser() && isValidId(notificationId) && existing().recipientId == request.auth.uid;
+    }
+
+    match /reports/{reportId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(reportId) &&
+        (existing().reportedBy == request.auth.uid || isAdmin() || isClubModerator(existing().clubId));
+
+      allow list: if isVerifiedUser() &&
+        resource.data.department == 'CS' &&
+        (resource.data.reportedBy == request.auth.uid || isAdmin() || isClubModerator(resource.data.clubId));
+
+      allow create: if isVerifiedUser() &&
+        isValidId(reportId) &&
+        isValidReport(incoming(), reportId) &&
+        incoming().reportedBy == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().resolutionNote == '' &&
+        incoming().resolvedBy == '' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/posts/$(incoming().postId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(reportId) &&
+        isValidReport(incoming(), reportId) &&
+        incoming().reportId == existing().reportId &&
+        incoming().targetType == existing().targetType &&
+        incoming().targetId == existing().targetId &&
+        incoming().postId == existing().postId &&
+        incoming().clubId == existing().clubId &&
+        incoming().department == existing().department &&
+        incoming().reportedBy == existing().reportedBy &&
+        incoming().reporterName == existing().reporterName &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        existing().status == 'open' &&
+        (isAdmin() || isClubModerator(existing().clubId)) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolutionNote', 'resolvedBy', 'updatedAt']) &&
+        incoming().status in ['resolved', 'dismissed'] &&
+        incoming().resolvedBy == request.auth.uid;
+
+      allow delete: if isVerifiedUser() && isValidId(reportId) && isAdmin();
+    }
+
+    match /activityLogs/{logId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(logId) &&
+        (isAdmin() || existing().actorId == request.auth.uid);
+
+      allow list: if isVerifiedUser() &&
+        resource.data.department == 'CS' &&
+        (resource.data.actorId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(logId) &&
+        isValidActivityLog(incoming(), logId) &&
+        incoming().actorId == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

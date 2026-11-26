@@ -1,0 +1,395 @@
+{
+  "entities": {
+    "UserPrivateAccount": {
+      "title": "UserPrivateAccount",
+      "description": "PII-isolated private account document for a Campus Connect member, storing verified institutional email, university student ID, and authoritative role mirrors.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 254 },
+        "studentId": { "type": "string", "minLength": 0, "maxLength": 32, "pattern": "^[a-zA-Z0-9\\-]*$" },
+        "role": { "type": "string", "enum": ["student", "moderator", "admin"] },
+        "adminTitle": { "type": "string", "enum": ["none", "Head CR", "Head GR", "HOD"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "studentId", "role", "adminTitle", "createdAt", "updatedAt"]
+    },
+    "MemberProfile": {
+      "title": "MemberProfile",
+      "description": "Public, zero-PII CS Department member profile used across the Campus Connect community directory and discussion headers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "photoURL": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "department": { "type": "string", "enum": ["CS"] },
+        "role": { "type": "string", "enum": ["student", "moderator", "admin"] },
+        "adminTitle": { "type": "string", "enum": ["none", "Head CR", "Head GR", "HOD"] },
+        "semester": {
+          "type": "string",
+          "enum": ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5", "Semester 6", "Semester 7", "Semester 8", "Faculty"]
+        },
+        "track": {
+          "type": "string",
+          "enum": ["General CS", "Systems & Architecture", "AI & Machine Learning", "Cybersecurity", "Software Engineering", "Data Science", "Department Faculty"]
+        },
+        "bio": { "type": "string", "minLength": 0, "maxLength": 280 },
+        "assignedClubIds": { "type": "array" },
+        "onboardingCompleted": { "type": "boolean" },
+        "isDirectoryVisible": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "photoURL", "department", "role", "adminTitle", "semester", "track", "bio", "assignedClubIds", "onboardingCompleted", "isDirectoryVisible", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Authoritative RBAC document certifying a Computer Science Department Admin (Head CR, Head GR, or HOD).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "adminTitle": { "type": "string", "enum": ["Head CR", "Head GR", "HOD"] },
+        "grantedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "adminTitle", "grantedBy", "createdAt", "updatedAt"]
+    },
+    "ModeratorRecord": {
+      "title": "ModeratorRecord",
+      "description": "Authoritative RBAC document certifying a Club Moderator and their assigned club scope.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "assignedClubIds": { "type": "array" },
+        "grantedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "assignedClubIds", "grantedBy", "createdAt", "updatedAt"]
+    },
+    "Club": {
+      "title": "Club",
+      "description": "Computer Science Department technical club managed by Admins and assigned Moderators.",
+      "type": "object",
+      "properties": {
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 800 },
+        "category": {
+          "type": "string",
+          "enum": ["AI & Data", "Systems & Cloud", "Cybersecurity", "Software & Web", "Competitive Programming", "Robotics & IoT", "Research & Open Source"]
+        },
+        "logoUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "department": { "type": "string", "enum": ["CS"] },
+        "status": { "type": "string", "enum": ["active", "archived"] },
+        "memberCount": { "type": "integer" },
+        "moderatorIds": { "type": "array" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clubId", "name", "description", "category", "logoUrl", "department", "status", "memberCount", "moderatorIds", "createdBy", "createdAt", "updatedAt"]
+    },
+    "ClubMembership": {
+      "title": "ClubMembership",
+      "description": "Deterministic membership record preventing duplicate enrollments for a student in a club.",
+      "type": "object",
+      "properties": {
+        "membershipId": { "type": "string", "minLength": 4, "maxLength": 196, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "clubName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "department": { "type": "string", "enum": ["CS"] },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["membershipId", "clubId", "clubName", "userId", "memberName", "department", "joinedAt"]
+    },
+    "ClubRequest": {
+      "title": "ClubRequest",
+      "description": "Student proposal to establish a new CS Department club, reviewed by Admins.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "proposedSlug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "category": {
+          "type": "string",
+          "enum": ["AI & Data", "Systems & Cloud", "Cybersecurity", "Software & Web", "Competitive Programming", "Robotics & IoT", "Research & Open Source"]
+        },
+        "description": { "type": "string", "minLength": 10, "maxLength": 800 },
+        "justification": { "type": "string", "minLength": 10, "maxLength": 500 },
+        "logoUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "department": { "type": "string", "enum": ["CS"] },
+        "requestedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requesterName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewNote": { "type": "string", "minLength": 0, "maxLength": 400 },
+        "reviewedBy": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "name", "proposedSlug", "category", "description", "justification", "logoUrl", "department", "requestedBy", "requesterName", "status", "reviewNote", "reviewedBy", "createdAt", "updatedAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Club-scoped Reddit-style discussion thread with optional external link, attachment, pinning, and vote/comment counters.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "clubName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "department": { "type": "string", "enum": ["CS"] },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "authorRole": { "type": "string", "enum": ["student", "moderator", "admin"] },
+        "title": { "type": "string", "minLength": 4, "maxLength": 180 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "externalUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "attachmentUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "attachmentName": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "attachmentType": { "type": "string", "enum": ["none", "image", "document"] },
+        "isPinned": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "removed", "deleted"] },
+        "removedReason": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "moderatedBy": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "upvoteCount": { "type": "integer" },
+        "downvoteCount": { "type": "integer" },
+        "voteScore": { "type": "integer" },
+        "commentCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "clubId", "clubName", "department", "authorId", "authorName", "authorRole", "title", "body", "externalUrl", "attachmentUrl", "attachmentName", "attachmentType", "isPinned", "status", "removedReason", "moderatedBy", "upvoteCount", "downvoteCount", "voteScore", "commentCount", "createdAt", "updatedAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Discussion comment or nested reply belonging to a club post.",
+      "type": "object",
+      "properties": {
+        "commentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "parentCommentId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "department": { "type": "string", "enum": ["CS"] },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "authorRole": { "type": "string", "enum": ["student", "moderator", "admin"] },
+        "body": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["active", "removed", "deleted"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["commentId", "postId", "clubId", "parentCommentId", "department", "authorId", "authorName", "authorRole", "body", "status", "createdAt", "updatedAt"]
+    },
+    "PostVote": {
+      "title": "PostVote",
+      "description": "Deterministic per-user vote (+1 or -1) on a discussion post preventing duplicate votes.",
+      "type": "object",
+      "properties": {
+        "voteId": { "type": "string", "minLength": 4, "maxLength": 258, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "value": { "type": "integer", "enum": [1, -1] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["voteId", "postId", "clubId", "userId", "value", "createdAt", "updatedAt"]
+    },
+    "PostBookmark": {
+      "title": "PostBookmark",
+      "description": "Private user bookmark referencing a saved club discussion post.",
+      "type": "object",
+      "properties": {
+        "bookmarkId": { "type": "string", "minLength": 4, "maxLength": 258, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "postTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookmarkId", "postId", "clubId", "postTitle", "userId", "createdAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Official CS Department announcement published strictly by authorized Department Admins.",
+      "type": "object",
+      "properties": {
+        "announcementId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 4, "maxLength": 180 },
+        "body": { "type": "string", "minLength": 10, "maxLength": 8000 },
+        "category": { "type": "string", "enum": ["Academic", "Examination", "Club Notice", "Placement & Career", "General"] },
+        "externalUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "attachmentUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "attachmentName": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "isPinned": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["published", "archived"] },
+        "department": { "type": "string", "enum": ["CS"] },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "authorTitle": { "type": "string", "enum": ["Head CR", "Head GR", "HOD"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["announcementId", "title", "body", "category", "externalUrl", "attachmentUrl", "attachmentName", "isPinned", "status", "department", "authorId", "authorName", "authorTitle", "createdAt", "updatedAt"]
+    },
+    "DepartmentEvent": {
+      "title": "DepartmentEvent",
+      "description": "Official Computer Science Department calendar event managed by Admins.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 4, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 3000 },
+        "category": { "type": "string", "enum": ["Seminar", "Workshop", "Hackathon", "Club Meetup", "Academic Deadline", "Department Townhall"] },
+        "eventDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "startTime": { "type": "string", "minLength": 5, "maxLength": 5, "pattern": "^[0-9]{2}:[0-9]{2}$" },
+        "endTime": { "type": "string", "minLength": 5, "maxLength": 5, "pattern": "^[0-9]{2}:[0-9]{2}$" },
+        "venue": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "registrationUrl": { "type": "string", "format": "uri", "minLength": 0, "maxLength": 512, "pattern": "^$|^https://.*$" },
+        "clubId": { "type": "string", "minLength": 0, "maxLength": 64 },
+        "status": { "type": "string", "enum": ["scheduled", "cancelled", "archived"] },
+        "department": { "type": "string", "enum": ["CS"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdByName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "title", "description", "category", "eventDate", "startTime", "endTime", "venue", "registrationUrl", "clubId", "status", "department", "createdBy", "createdByName", "createdAt", "updatedAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Per-user in-app notification for club requests, announcements, events, replies, and moderation actions.",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "type": { "type": "string", "enum": ["club_request", "announcement", "event", "club_activity", "moderation", "post_comment", "comment_reply"] },
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "message": { "type": "string", "minLength": 2, "maxLength": 400 },
+        "targetSection": { "type": "string", "enum": ["clubs", "discussions", "announcements", "calendar", "moderator", "admin", "overview"] },
+        "targetId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "readAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notificationId", "recipientId", "actorId", "actorName", "type", "title", "message", "targetSection", "targetId", "isRead", "createdAt", "readAt"]
+    },
+    "ContentReport": {
+      "title": "ContentReport",
+      "description": "User report flagging inappropriate posts or comments for club moderator or admin review.",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["post", "comment"] },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "clubId": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "department": { "type": "string", "enum": ["CS"] },
+        "targetExcerpt": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "reason": {
+          "type": "string",
+          "enum": ["Spam or Self-Promotion", "Harassment or Disrespect", "Off-Topic for Club", "Academic Integrity Violation", "Misinformation or Unsafe Link"]
+        },
+        "details": { "type": "string", "minLength": 0, "maxLength": 500 },
+        "reportedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporterName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "status": { "type": "string", "enum": ["open", "resolved", "dismissed"] },
+        "resolutionNote": { "type": "string", "minLength": 0, "maxLength": 400 },
+        "resolvedBy": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reportId", "targetType", "targetId", "postId", "clubId", "department", "targetExcerpt", "reason", "details", "reportedBy", "reporterName", "status", "resolutionNote", "resolvedBy", "createdAt", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Immutable append-only audit log recording governance, moderation, and administrative actions.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "actorRole": { "type": "string", "enum": ["student", "moderator", "admin"] },
+        "action": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "entityType": { "type": "string", "enum": ["club", "clubRequest", "post", "comment", "announcement", "event", "report", "role"] },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "summary": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "department": { "type": "string", "enum": ["CS"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "actorId", "actorName", "actorRole", "action", "entityType", "entityId", "summary", "department", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivateAccount" },
+      "description": "Private PII account records isolated to the document owner and verified CS Department Admins."
+    },
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/MemberProfile" },
+      "description": "Zero-PII public academic profiles for verified CS Department members."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authoritative Admin RBAC registry (Head CR, Head GR, HOD)."
+    },
+    "/moderators/{userId}": {
+      "schema": { "$ref": "#/entities/ModeratorRecord" },
+      "description": "Authoritative Moderator RBAC registry with bounded club assignments."
+    },
+    "/clubs/{clubId}": {
+      "schema": { "$ref": "#/entities/Club" },
+      "description": "Official CS Department technical clubs."
+    },
+    "/clubMemberships/{membershipId}": {
+      "schema": { "$ref": "#/entities/ClubMembership" },
+      "description": "Deterministic club membership records preventing duplicate joins."
+    },
+    "/clubRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/ClubRequest" },
+      "description": "Student club creation proposals reviewed by Admins."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Club-scoped discussion threads."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments and nested replies on club posts."
+    },
+    "/votes/{voteId}": {
+      "schema": { "$ref": "#/entities/PostVote" },
+      "description": "Per-user upvotes and downvotes preventing duplicate voting."
+    },
+    "/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "#/entities/PostBookmark" },
+      "description": "Private user post bookmarks."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Official CS Department announcements managed strictly by Admins."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/DepartmentEvent" },
+      "description": "Department event calendar entries managed strictly by Admins."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "Per-user in-app notifications with read tracking."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ContentReport" },
+      "description": "Moderation reports for posts and comments."
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Immutable audit trail of department governance and moderation activity."
+    }
+  }
+}

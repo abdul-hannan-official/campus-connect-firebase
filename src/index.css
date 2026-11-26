@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #f4f6f5;
+    color: #0f172a;
+  }
+
+  .dark body {
+    background-color: #090f0c;
+    color: #f1f5f3;
+    letter-spacing: 0.005em;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Signature forest-emerald gradient surface */
+.bg-emerald-hero {
+  background: linear-gradient(135deg, #176942 0%, #0f4c2e 52%, #092c1b 100%);
+}
+
+.bg-emerald-btn {
+  background: linear-gradient(135deg, #1b7449 0%, #0f4c2e 55%, #0b3621 100%);
+}
+
+.bg-emerald-btn:hover {
+  background: linear-gradient(135deg, #1f8252 0%, #125836 55%, #0e4128 100%);
+}
+
+/* Diagonal hatched stripe pattern for upcoming days in weekly activity bar chart */
+.bg-hatched-emerald {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(21, 115, 71, 0.24),
+    rgba(21, 115, 71, 0.24) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  border: 1.5px solid rgba(21, 115, 71, 0.35);
+}
+
+.dark .bg-hatched-emerald {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(110, 231, 183, 0.25),
+    rgba(110, 231, 183, 0.25) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  border: 1.5px solid rgba(110, 231, 183, 0.3);
+}
+
+.bg-hatched-emerald-on-dark {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0.16) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

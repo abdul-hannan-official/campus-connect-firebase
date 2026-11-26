@@ -1,0 +1,6 @@
+{
+  "name": "Campus Connect",
+  "description": "A modern Computer Science Department community platform for clubs, discussions, official announcements, and campus events.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
